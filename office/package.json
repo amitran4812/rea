@@ -65,14 +65,14 @@
     "fileAssociations": [
       {
         "ext": "docx",
-        "name": "Word document",
-        "description": "Document",
+        "name": "Document",
+        "description": "Document (.docx)",
         "role": "Editor"
       },
       {
         "ext": "xlsx",
-        "name": "Excel workbook",
-        "description": "Workbook",
+        "name": "Workbook",
+        "description": "Workbook (.xlsx)",
         "role": "Editor"
       },
       {
@@ -106,7 +106,8 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Rea Office"
+      "shortcutName": "Rea Office",
+      "artifactName": "Rea-Office-Setup-${version}.${ext}"
     },
     "mac": {
       "target": [

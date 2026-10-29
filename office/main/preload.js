@@ -40,5 +40,6 @@ contextBridge.exposeInMainWorld('office', {
       ipcRenderer.send('claude:start', { id, payload });
     },
     cancel: (id) => ipcRenderer.send('claude:cancel', id),
+    verify: (key) => ipcRenderer.invoke('claude:verify', key),
   },
 });

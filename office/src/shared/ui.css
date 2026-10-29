@@ -218,6 +218,14 @@ button { cursor: default; }
 .bs-export div { display: flex; flex-direction: column; }
 .bs-export span { color: var(--muted); }
 .settings-form { max-width: 520px; }
+.settings-status { padding: 8px 10px; border-radius: 6px; background: var(--hover); font-size: 13px; }
+.settings-status.ok { background: #e6f4ea; color: #1b5e33; }
+.settings-status.bad { background: #fdecea; color: #a1261b; }
+.connect-steps { padding-left: 20px; margin: 12px 0; }
+.connect-steps li { margin-bottom: 12px; }
+.connect-steps li > b { display: block; margin-bottom: 6px; }
+.connect-steps .btn { display: inline-flex; align-items: center; gap: 6px; }
+.connect-steps .muted { display: block; margin-top: 4px; font-size: 12px; }
 .settings-form h2 { display: flex; align-items: center; gap: 8px; }
 .settings-form h2 .ico .a { fill: var(--claude); }
 .settings-form a { color: var(--accent); }

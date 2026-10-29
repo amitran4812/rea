@@ -199,6 +199,7 @@ ipcMain.on('claude:start', (e, { id, payload }) => {
   claude.start(e.sender, id, payload);
 });
 ipcMain.on('claude:cancel', (e, id) => claude.cancel(id));
+ipcMain.handle('claude:verify', (e, key) => claude.verify(key));
 
 function filesFromArgv(argv) {
   return argv.slice(app.isPackaged ? 1 : 2).filter((a) => !a.startsWith('-') && formats.appForFile(a));

@@ -16,7 +16,7 @@ Every app has a familiar ribbon toolbar, a File screen (New, Open, Save, Export,
 | Sheets | Write a formula for the active cell, explain a formula, analyze the data, generate a table, clean up a messy selection |
 | Slides | Write a whole deck from a topic, improve the current slide, suggest the next slide, write speaker notes for every slide, and **What to say** during a slide show: a button on the bottom bar (or the S key) shows a short script for the slide on screen that follows along as you change slides |
 
-Claude runs through your own Anthropic API key. Add it in **File > Options** or in the Claude pane the first time you open it. The key is encrypted with the operating system's keychain (Electron `safeStorage`) and only ever leaves your computer in requests to the Anthropic API. You can also set `ANTHROPIC_API_KEY` in the environment instead.
+Claude runs through your own Anthropic account. In **File > Options** (or the Claude pane), click **Sign in and create a key** to open the Anthropic Console, create a key, then paste it and click **Connect**; the key is checked with Anthropic before it is saved. The key is encrypted with the operating system's keychain (Electron `safeStorage`) and only ever leaves your computer in requests to the Anthropic API. You can also set `ANTHROPIC_API_KEY` in the environment instead.
 
 The default model is Claude Opus 5.5 with medium effort; you can switch to Sonnet 5.5 or Haiku 5.5 and change the effort in Options.
 

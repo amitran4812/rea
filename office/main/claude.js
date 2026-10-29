@@ -67,8 +67,21 @@ async function start(sender, id, payload) {
   }
 }
 
+// Checks a key (or the saved one) with a free Models API call, so the
+// "Connect Claude" flow can confirm sign-in before saving.
+async function verify(key) {
+  const apiKey = (key || '').trim() || settings.getApiKey();
+  if (!apiKey) return { ok: false, message: 'Paste your Anthropic API key first.' };
+  try {
+    await new Anthropic({ apiKey }).models.list({ limit: 1 });
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, message: errorMessage(err) || 'Could not check the key.' };
+  }
+}
+
 function cancel(id) {
   active.get(id)?.abort();
 }
 
-module.exports = { start, cancel, buildRequest };
+module.exports = { start, cancel, verify, buildRequest };

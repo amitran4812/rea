@@ -366,7 +366,15 @@ class Backstage {
       c.append(list);
     } else if (section === 'options') {
       c.append(h('h1', '', 'Options'));
-      c.append(await settingsForm());
+      const mount = async () => {
+        const form = await settingsForm(() => {
+          mount();
+          this.shell.claude?.loadSettings?.();
+        });
+        c.querySelector('.settings-form')?.remove();
+        c.append(form);
+      };
+      await mount();
     }
   }
 }
@@ -392,33 +400,60 @@ async function recentList(onOpen) {
 export async function settingsForm(onSaved) {
   const s = await window.office.settings.get();
   const form = h('form', 'settings-form');
+  const status = s.keyFromEnv ? 'Connected through the ANTHROPIC_API_KEY environment variable.' : s.hasKey ? 'Connected. Your key is saved on this computer.' : 'Not connected yet.';
   form.innerHTML = `
-    <h2>${icon('sparkle', 18)} Claude</h2>
-    <p class="muted">Claude runs through your own Anthropic API key. The key is stored encrypted on this computer and is only sent to Anthropic.</p>
-    <label class="modal-field"><span>Anthropic API key</span>
-      <input name="apiKey" type="password" autocomplete="off" placeholder="${s.hasKey ? '•••••••• (saved)' : 'sk-ant-…'}" ${s.keyFromEnv ? 'disabled' : ''}>
-    </label>
-    ${s.keyFromEnv ? '<p class="muted">Using the ANTHROPIC_API_KEY environment variable.</p>' : ''}
-    <p><a href="#" data-link="https://console.anthropic.com/settings/keys">Get an API key from the Anthropic Console</a></p>
+    <h2>${icon('sparkle', 18)} Connect Claude</h2>
+    <p class="settings-status ${s.hasKey ? 'ok' : ''}" data-status>${escapeHtml(status)}</p>
+    <ol class="connect-steps">
+      <li><b>Sign in to your Anthropic account.</b> <button class="btn" type="button" data-link="https://console.anthropic.com/settings/keys">${icon('key', 16)} Sign in and create a key</button>
+        <span class="muted">Opens the Anthropic Console in your browser. Create a key there and copy it.</span></li>
+      <li><b>Paste the key here.</b>
+        <label class="modal-field"><span>Anthropic API key</span>
+          <input name="apiKey" type="password" autocomplete="off" placeholder="${s.hasKey ? '•••••••• (saved)' : 'sk-ant-…'}" ${s.keyFromEnv ? 'disabled' : ''}>
+        </label></li>
+    </ol>
+    <p class="muted">The key is checked with Anthropic, then stored encrypted on this computer. It is only ever sent to Anthropic.</p>
     <label class="modal-field"><span>Model</span><select name="model">${s.models.map((m) => `<option value="${m.id}" ${m.id === s.model ? 'selected' : ''}>${escapeHtml(m.label)}</option>`).join('')}</select></label>
     <label class="modal-field"><span>Thinking effort</span><select name="effort">${['low', 'medium', 'high', 'xhigh', 'max'].map((e) => `<option ${e === s.effort ? 'selected' : ''}>${e}</option>`).join('')}</select></label>
-    <div class="modal-actions"><button class="btn primary" type="submit">Save settings</button>${s.hasKey && !s.keyFromEnv ? '<button class="btn" type="button" data-remove>Remove key</button>' : ''}</div>`;
+    <div class="modal-actions"><button class="btn primary" type="submit">${s.hasKey ? 'Save settings' : 'Connect'}</button>${s.hasKey ? '<button class="btn" type="button" data-test>Test connection</button>' : ''}${s.hasKey && !s.keyFromEnv ? '<button class="btn" type="button" data-remove>Sign out</button>' : ''}</div>`;
+  const statusEl = form.querySelector('[data-status]');
+  const setStatus = (text, ok) => {
+    statusEl.textContent = text;
+    statusEl.className = `settings-status ${ok === true ? 'ok' : ok === false ? 'bad' : ''}`;
+  };
   form.querySelector('[data-link]').onclick = (e) => {
     e.preventDefault();
-    window.office.openExternal(e.target.dataset.link);
+    window.office.openExternal(e.currentTarget.dataset.link);
   };
+  form.querySelector('[data-test]')?.addEventListener('click', async () => {
+    setStatus('Checking…');
+    const r = await window.office.claude.verify();
+    setStatus(r.ok ? 'Connected. Claude is ready.' : r.message, r.ok);
+  });
   form.onsubmit = async (e) => {
     e.preventDefault();
     const fd = new FormData(form);
     const patch = { model: fd.get('model'), effort: fd.get('effort') };
-    if (fd.get('apiKey')) patch.apiKey = fd.get('apiKey');
+    const key = fd.get('apiKey');
+    if (key) {
+      setStatus('Checking your key with Anthropic…');
+      const r = await window.office.claude.verify(key);
+      if (!r.ok) {
+        setStatus(r.message, false);
+        return;
+      }
+      patch.apiKey = key;
+    } else if (!s.hasKey) {
+      setStatus('Paste your Anthropic API key first.', false);
+      return;
+    }
     const next = await window.office.settings.set(patch);
-    toast('Settings saved');
+    toast(key ? 'Claude is connected' : 'Settings saved');
     onSaved?.(next);
   };
   form.querySelector('[data-remove]')?.addEventListener('click', async () => {
     const next = await window.office.settings.set({ apiKey: '' });
-    toast('API key removed');
+    toast('Signed out of Claude');
     onSaved?.(next);
   });
   return form;
