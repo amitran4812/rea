@@ -4,6 +4,7 @@
   "sortImports": false,
   "sortPackageJson": false,
   "ignorePatterns": [
+    "office/**",
     "dist/**",
     "build/**",
     "docs/api/**",

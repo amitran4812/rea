@@ -2,6 +2,7 @@
   "threshold": 4,
   "reporters": ["consoleFull"],
   "ignore": [
+    "office/**",
     "node_modules/**",
     "dist/**",
     "docs/**",
