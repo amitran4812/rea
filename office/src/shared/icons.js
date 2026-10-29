@@ -87,6 +87,8 @@ const P = {
   help: '<circle cx="10" cy="10" r="8"/><path class="a-s" d="M7.5 7.5a2.5 2.5 0 015 .5c0 1.5-2.5 2-2.5 3.5M10 14v.5"/>',
   stop: '<rect class="a" x="5" y="5" width="10" height="10" rx="1.5"/>',
   send: '<path class="a" d="M2.5 10L17.5 3l-3.5 14-4-5.5z"/><path d="M10 11.5l7.5-8.5"/>',
+  prevSlide: '<path d="M12.5 4.5L7 10l5.5 5.5"/>',
+  nextSlide: '<path d="M7.5 4.5L13 10l-5.5 5.5"/>',
   chevronDown: '<path d="M5 8l5 5 5-5"/>',
   plus: '<path d="M10 4v12M4 10h12"/>',
   up: '<path d="M10 16V4M5 9l5-5 5 5"/>',

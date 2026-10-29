@@ -1,7 +1,8 @@
 import '../shared/ui.css';
 import './slides.css';
 import { createShell, escapeHtml, h, toast } from '../shared/shell.js';
-import { sanitize } from '../shared/claude-pane.js';
+import { markdownToHtml, sanitize } from '../shared/claude-pane.js';
+import { icon } from '../shared/icons.js';
 
 const W = 960;
 const H = 540;
@@ -583,7 +584,25 @@ function setBackground(color) {
 }
 
 // ---------- presenting ----------
+// The bottom bar has a "What to say" button: Claude writes a short script for
+// the slide on screen, and it follows along as the slides change.
 let presentIndex = 0;
+let coachOn = false;
+let barTimer = 0;
+const scripts = new Map(); // slide key -> { text, done, error }
+let scriptRun = null; // { id, key }
+const presentBar = h('div', 'present-bar');
+const coach = h('div', 'present-coach');
+presentBar.addEventListener('click', (e) => e.stopPropagation());
+coach.addEventListener('click', (e) => e.stopPropagation());
+
+function presentBtn(iconName, label, run) {
+  const b = h('button', 'present-btn', `${icon(iconName, 18)}<span>${esc(label)}</span>`);
+  b.title = label;
+  b.onclick = run;
+  return b;
+}
+
 function present(from = 0) {
   finishEditing();
   presentIndex = from;
@@ -591,30 +610,136 @@ function present(from = 0) {
   presenter.classList.add('on');
   window.office.fullscreen(true);
   showPresented();
+  wakeBar();
+}
+function presentGo(i) {
+  if (i >= deck.slides.length) return endPresent();
+  presentIndex = Math.max(0, i);
+  showPresented();
 }
 function showPresented() {
   const s = deck.slides[presentIndex];
   presenter.innerHTML = '';
   const frame = h('div', 'present-frame');
   renderSlideInto(frame, s);
-  const scale = Math.min(window.innerWidth / W, window.innerHeight / H);
+  const room = coachOn ? Math.max(160, window.innerHeight * 0.3) : 0;
+  const scale = Math.min(window.innerWidth / W, (window.innerHeight - room) / H);
   frame.style.setProperty('--scale', scale);
   frame.style.width = `${W * scale}px`;
   frame.style.height = `${H * scale}px`;
-  presenter.append(frame, h('div', 'present-count', `${presentIndex + 1} / ${deck.slides.length}`));
+  presenter.classList.toggle('coach-on', coachOn);
+  presentBar.innerHTML = '';
+  presentBar.append(
+    presentBtn('prevSlide', 'Previous', () => presentGo(presentIndex - 1)),
+    h('span', 'present-count', `${presentIndex + 1} / ${deck.slides.length}`),
+    presentBtn('nextSlide', 'Next', () => presentGo(presentIndex + 1)),
+    h('span', 'present-sep'),
+  );
+  const coachBtn = presentBtn('sparkle', 'What to say', toggleCoach);
+  coachBtn.classList.toggle('on', coachOn);
+  coachBtn.title = 'Claude writes what to say for this slide (S)';
+  presentBar.append(coachBtn, h('span', 'present-sep'), presentBtn('close', 'End show', endPresent));
+  presenter.append(frame);
+  if (coachOn) presenter.append(coach);
+  presenter.append(presentBar);
+  if (coachOn) showScript();
 }
 function endPresent() {
   presenter.classList.remove('on');
   presenter.remove();
   window.office.fullscreen(false);
-  go(presentIndex);
+  cancelScript();
+  go(Math.min(presentIndex, deck.slides.length - 1));
 }
-presenter.addEventListener('click', () => {
-  if (presentIndex < deck.slides.length - 1) {
-    presentIndex += 1;
-    showPresented();
-  } else endPresent();
-});
+function wakeBar() {
+  presenter.classList.add('show-bar');
+  clearTimeout(barTimer);
+  barTimer = setTimeout(() => presenter.classList.remove('show-bar'), 2500);
+}
+presenter.addEventListener('mousemove', wakeBar);
+presenter.addEventListener('click', () => presentGo(presentIndex + 1));
+
+function toggleCoach() {
+  coachOn = !coachOn;
+  if (!coachOn) cancelScript();
+  showPresented();
+}
+
+function slideOutline(s, i) {
+  const parts = s.elements.filter((e) => e.type !== 'image').map((e) => `  [${e.role || e.type}] ${plainText(e) || '(empty)'}`);
+  if (s.elements.some((e) => e.type === 'image')) parts.push('  [image]');
+  return `Slide ${i + 1} (${LAYOUTS[s.layout]?.label || s.layout})\n${parts.join('\n')}${s.notes ? `\n  [notes] ${s.notes}` : ''}`;
+}
+const slideKey = (i) => `${i}|${slideOutline(deck.slides[i], i)}`;
+
+function cancelScript() {
+  if (scriptRun) window.office.claude.cancel(scriptRun.id);
+  scriptRun = null;
+}
+
+async function showScript() {
+  const i = presentIndex;
+  const key = slideKey(i);
+  const head = h('div', 'coach-head', `${icon('sparkle', 16)}<b>What to say</b><span>Slide ${i + 1} of ${deck.slides.length}</span>`);
+  const again = h('button', 'present-btn small', `${icon('replace', 14)}<span>Rewrite</span>`);
+  again.onclick = () => {
+    scripts.delete(key);
+    if (scriptRun?.key === key) cancelScript();
+    showScript();
+  };
+  head.append(again);
+  const body = h('div', 'coach-body');
+  coach.innerHTML = '';
+  coach.append(head, body);
+  const paint = () => {
+    if (presentIndex !== i || !coachOn) return;
+    const st = scripts.get(key);
+    if (!st) return;
+    if (st.error) body.innerHTML = `<div class="coach-error">${esc(st.error)}</div>`;
+    else if (!st.text) body.innerHTML = '<span class="coach-wait">Claude is reading this slide…</span>';
+    else body.innerHTML = markdownToHtml(st.text);
+  };
+  if (scripts.has(key) && !scripts.get(key).error) return paint();
+  if (scriptRun && scriptRun.key !== key) cancelScript();
+  if (scriptRun?.key === key) return paint();
+
+  const settings = await window.office.settings.get();
+  if (!settings.hasKey) {
+    body.innerHTML = '<div class="coach-error">Claude isn’t connected yet. End the show and add your Anthropic API key in File &gt; Options.</div>';
+    return;
+  }
+  const st = { text: '', done: false, error: null };
+  scripts.set(key, st);
+  paint();
+  const id = `script-${Date.now()}-${i}`;
+  scriptRun = { id, key };
+  const outline = deck.slides.map((s, n) => slideOutline(s, n)).join('\n\n');
+  window.office.claude.stream(id, {
+    system: [
+      'You are Claude, helping someone give a live presentation in Rea Slides.',
+      'Write what the presenter should say out loud for the slide on screen: natural, spoken sentences in the first person, as if talking to the audience.',
+      'Explain what is on the slide rather than reading it word for word, and add a smooth handoff to the next slide when there is one.',
+      'If the slide has speaker notes, build on them. Keep it under 120 words. Plain Markdown paragraphs; use bold for the key phrase to stress. No headings, no preamble.',
+    ].join('\n'),
+    messages: [{
+      role: 'user',
+      content: `<presentation name="${shell.state.name}" slides="${deck.slides.length}">\n${outline}\n</presentation>\n\nWrite what I should say for slide ${i + 1}.`,
+    }],
+    maxTokens: 1024,
+  }, (evt) => {
+    if (evt.type === 'text') {
+      st.text += evt.text;
+      paint();
+      return;
+    }
+    if (scriptRun?.id === id) scriptRun = null;
+    if (evt.type === 'error') st.error = evt.message;
+    else if (!st.text) scripts.delete(key);
+    st.done = true;
+    paint();
+  });
+}
+
 window.addEventListener('resize', () => {
   if (presenter.classList.contains('on')) showPresented();
 });
@@ -623,15 +748,10 @@ window.addEventListener('resize', () => {
 document.addEventListener('keydown', (e) => {
   const mod = e.ctrlKey || e.metaKey;
   if (presenter.classList.contains('on')) {
-    if (['ArrowRight', 'ArrowDown', 'PageDown', ' ', 'Enter', 'n'].includes(e.key)) {
-      if (presentIndex < deck.slides.length - 1) {
-        presentIndex += 1;
-        showPresented();
-      } else endPresent();
-    } else if (['ArrowLeft', 'ArrowUp', 'PageUp', 'Backspace', 'p'].includes(e.key)) {
-      presentIndex = Math.max(0, presentIndex - 1);
-      showPresented();
-    } else if (e.key === 'Escape') endPresent();
+    if (['ArrowRight', 'ArrowDown', 'PageDown', ' ', 'Enter', 'n'].includes(e.key)) presentGo(presentIndex + 1);
+    else if (['ArrowLeft', 'ArrowUp', 'PageUp', 'Backspace', 'p'].includes(e.key)) presentGo(presentIndex - 1);
+    else if (e.key.toLowerCase() === 's') toggleCoach();
+    else if (e.key === 'Escape') endPresent();
     e.preventDefault();
     return;
   }
@@ -785,11 +905,7 @@ function plainText(el) {
 }
 
 function deckOutline() {
-  return deck.slides.map((s, i) => {
-    const parts = s.elements.filter((e) => e.type !== 'image').map((e) => `  [${e.role || e.type}] ${plainText(e) || '(empty)'}`);
-    if (s.elements.some((e) => e.type === 'image')) parts.push('  [image]');
-    return `Slide ${i + 1} (${LAYOUTS[s.layout]?.label || s.layout})${i === current ? ' ← current' : ''}\n${parts.join('\n')}${s.notes ? `\n  [notes] ${s.notes}` : ''}`;
-  }).join('\n\n');
+  return deck.slides.map((s, i) => slideOutline(s, i).replace(/\n/, i === current ? ' ← current\n' : '\n')).join('\n\n');
 }
 
 const esc = (s) => escapeHtml(s);

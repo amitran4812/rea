@@ -14,7 +14,7 @@ Every app has a familiar ribbon toolbar, a File screen (New, Open, Save, Export,
 | --- | --- |
 | Docs | Draft from a description, continue writing, improve or shorten a selection, change tone, summarize, proofread with one-click corrections, translate, chat about the document |
 | Sheets | Write a formula for the active cell, explain a formula, analyze the data, generate a table, clean up a messy selection |
-| Slides | Write a whole deck from a topic, improve the current slide, suggest the next slide, write speaker notes for every slide |
+| Slides | Write a whole deck from a topic, improve the current slide, suggest the next slide, write speaker notes for every slide, and **What to say** during a slide show: a button on the bottom bar (or the S key) shows a short script for the slide on screen that follows along as you change slides |
 
 Claude runs through your own Anthropic API key. Add it in **File > Options** or in the Claude pane the first time you open it. The key is encrypted with the operating system's keychain (Electron `safeStorage`) and only ever leaves your computer in requests to the Anthropic API. You can also set `ANTHROPIC_API_KEY` in the environment instead.
 
