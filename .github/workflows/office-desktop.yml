@@ -1,0 +1,85 @@
+name: Rea Office desktop
+
+on:
+  pull_request:
+    paths:
+      - "office/**"
+      - ".github/workflows/office-desktop.yml"
+  push:
+    branches: [main]
+    paths:
+      - "office/**"
+      - ".github/workflows/office-desktop.yml"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: office-desktop-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: office
+
+jobs:
+  test:
+    name: Office tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+
+  package:
+    name: Installer (${{ matrix.os }})
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-2025
+            script: dist:win
+            files: |
+              office/release/*.exe
+          - os: macos-15
+            script: dist:mac
+            files: |
+              office/release/*.dmg
+          - os: ubuntu-24.04
+            script: dist:linux
+            files: |
+              office/release/*.AppImage
+              office/release/*.deb
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 22
+      - run: npm ci
+      - name: Build installer
+        run: npm run ${{ matrix.script }}
+        env:
+          # Builds are unsigned; skip looking for signing identities.
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: rea-office-${{ matrix.os }}
+          path: ${{ matrix.files }}
+          if-no-files-found: error
+          retention-days: 14
